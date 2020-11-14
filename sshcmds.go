@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -17,11 +16,11 @@ type config struct {
 
 func newConfig() *config {
 	return &config{
-		timeout: setTimeout("10s"),
+		timeout: setDefaultTimeout("10s"),
 	}
 }
 
-func setTimeout(duration string) time.Duration {
+func setDefaultTimeout(duration string) time.Duration {
 	// Expect a string like 10s and convert to a time.Duration.
 	timeout, err := time.ParseDuration(duration)
 	if err != nil {
@@ -58,30 +57,28 @@ func (c *config) makeSSHConfig(userName, keyFile string) *ssh.ClientConfig {
 	}
 }
 
-// addKey appends an SSH private key to the list of keys
-func (c *config) addKey(userName, keyFile string) {
+// AddKey appends an SSH private key to the list of keys
+func (c *config) AddKey(userName, keyFile string) {
 	c.sshConfigs = append(c.sshConfigs, c.makeSSHConfig(userName, keyFile))
 }
 
-// sshClient creates an SSH session and issues a single command.  The output
-// from the command is returned as raw bytes.
-func (c *config) sshClient(hostname string) (client *ssh.Client, err error) {
+// Auth returns an ssh.Client struct after successfully authenticating with a key.
+func (c *config) Auth(hostname string) (client *ssh.Client, err error) {
 	hostport := fmt.Sprintf("%s:22", hostname)
 	for _, sshConfig := range c.sshConfigs {
 		client, err = ssh.Dial("tcp", hostport, sshConfig)
 		// If err is nil, we successfully dialed with the sshKey.
 		// We can stop iterating over keys and break out of the loop.
 		if err == nil {
-			log.Printf("Successfully dialed %s", hostname)
-			break
-		} else {
-			log.Printf("Failed to dial %s: %s", hostname, err)
+			return
 		}
 	}
+	err = fmt.Errorf("Failed to authenticate with %d keys", len(c.sshConfigs))
 	return
 }
 
-func sshCmd(client *ssh.Client, cmd string) (b bytes.Buffer, err error) {
+// Cmd runs a single command against a previously authenticated session and returns the output as a Byte buffer.
+func Cmd(client *ssh.Client, cmd string) (b bytes.Buffer, err error) {
 	// Each ClientConn can support multiple interactive sessions,
 	// represented by a Session.
 	session, err := client.NewSession()
