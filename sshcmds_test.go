@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+func TestInvalidKey(t *testing.T) {
+	cfg := NewConfig()
+	err := cfg.AddKey("foobar", "/invalid/filename")
+	if err == nil {
+		t.Fatal("Invalid filename failed to return an error")
+	}
+	t.Logf("Correctly failed with: %s", err)
+}
 func TestClient(t *testing.T) {
 	cfg := *NewConfig()
 	hostNames := []string{"bingo.mixmin.net"}
