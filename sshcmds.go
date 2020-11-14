@@ -9,13 +9,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type config struct {
+// Config holds details of each key config
+type Config struct {
 	timeout    time.Duration
 	sshConfigs []*ssh.ClientConfig
 }
 
-func newConfig() *config {
-	return &config{
+// NewConfig creates a new instance of the Config struct
+func NewConfig() *Config {
+	return &Config{
 		timeout: setDefaultTimeout("10s"),
 	}
 }
@@ -30,40 +32,49 @@ func setDefaultTimeout(duration string) time.Duration {
 }
 
 // publicKeyFile creates an SSH authentication method from a text file.
-func publicKey(file string) ssh.AuthMethod {
+func publicKey(file string) (ssh.AuthMethod, error) {
 	key, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return ssh.PublicKeys(signer)
+	return ssh.PublicKeys(signer), nil
 }
 
 // To authenticate with the remote server you must pass at least one
 // implementation of AuthMethod via the Auth field in ClientConfig,
 // and provide a HostKeyCallback.
-func (c *config) makeSSHConfig(userName, keyFile string) *ssh.ClientConfig {
+func (c *Config) makeSSHConfig(userName, keyFile string) (*ssh.ClientConfig, error) {
+	pk, err := publicKey(keyFile)
+	if err != nil {
+		return nil, err
+	}
 	return &ssh.ClientConfig{
 		User: userName,
 		Auth: []ssh.AuthMethod{
-			publicKey(keyFile),
+			pk,
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         c.timeout,
-	}
+	}, nil
 }
 
 // AddKey appends an SSH private key to the list of keys
-func (c *config) AddKey(userName, keyFile string) {
-	c.sshConfigs = append(c.sshConfigs, c.makeSSHConfig(userName, keyFile))
+func (c *Config) AddKey(userName, keyFile string) (err error) {
+	newConfig, err := c.makeSSHConfig(userName, keyFile)
+	if err != nil {
+		return
+	}
+	c.sshConfigs = append(c.sshConfigs, newConfig)
+	return
 }
 
 // Auth returns an ssh.Client struct after successfully authenticating with a key.
-func (c *config) Auth(hostname string) (client *ssh.Client, err error) {
+func (c *Config) Auth(hostname string) (client *ssh.Client, err error) {
 	hostport := fmt.Sprintf("%s:22", hostname)
 	for _, sshConfig := range c.sshConfigs {
 		client, err = ssh.Dial("tcp", hostport, sshConfig)
@@ -78,7 +89,7 @@ func (c *config) Auth(hostname string) (client *ssh.Client, err error) {
 }
 
 // Cmd runs a single command against a previously authenticated session and returns the output as a Byte buffer.
-func Cmd(client *ssh.Client, cmd string) (b bytes.Buffer, err error) {
+func (c *Config) Cmd(client *ssh.Client, cmd string) (b bytes.Buffer, err error) {
 	// Each ClientConn can support multiple interactive sessions,
 	// represented by a Session.
 	session, err := client.NewSession()

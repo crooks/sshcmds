@@ -7,13 +7,17 @@ import (
 	"testing"
 )
 
-var cfg config
-
 func TestClient(t *testing.T) {
-	cfg = *newConfig()
+	cfg := *NewConfig()
 	hostNames := []string{"bingo.mixmin.net"}
-	cfg.AddKey("crooks", "/home/crooks/.ssh/openwrt")
-	cfg.AddKey("crooks", "/home/crooks/.ssh/id_nopass")
+	err := cfg.AddKey("crooks", "/home/crooks/.ssh/openwrt")
+	if err != nil {
+		panic(err)
+	}
+	err = cfg.AddKey("crooks", "/home/crooks/.ssh/id_nopass")
+	if err != nil {
+		panic(err)
+	}
 	var b bytes.Buffer
 	for _, hostName := range hostNames {
 		client, err := cfg.Auth(hostName)
@@ -21,12 +25,12 @@ func TestClient(t *testing.T) {
 			log.Println(err)
 			continue
 		}
-		b, err = Cmd(client, "cat /etc/passwd")
+		b, err = cfg.Cmd(client, "cat /etc/passwd")
 		if err != nil {
 			panic(err)
 		}
 		fmt.Print(b.String())
-		b, err = Cmd(client, "cat /etc/group")
+		b, err = cfg.Cmd(client, "cat /etc/group")
 		if err != nil {
 			panic(err)
 		}
